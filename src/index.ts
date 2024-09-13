@@ -17,8 +17,9 @@ import {
   ZodUnion,
   type z,
 } from "zod";
-import type { zm } from "./mongoose.types.js";
-export * from "./extension.js";
+import type { zm } from "./mongoose.types";
+import { looksLikeInstanceof } from "./utils/looksLikeInstanceof";
+export * from "./extension";
 
 /**
  * Converts a Zod schema to a Mongoose schema
@@ -53,7 +54,7 @@ export * from "./extension.js";
  */
 export function zodSchema<T extends ZodRawShape>(
   schema: ZodObject<T>,
-  options?: SchemaOptions<any>, // TODO: Fix any
+  options?: SchemaOptions<any> // TODO: Fix any
 ): Schema<z.infer<typeof schema>> {
   const definition = parseObject(schema);
   return new Schema<z.infer<typeof schema>>(definition, options);
@@ -91,7 +92,9 @@ export function zodSchema<T extends ZodRawShape>(
  * const schema = new Schema(rawSchema);
  * const userModel = model('User', schema);
  */
-export function zodSchemaRaw<T extends ZodRawShape>(schema: ZodObject<T>): zm._Schema<T> {
+export function zodSchemaRaw<T extends ZodRawShape>(
+  schema: ZodObject<T>
+): zm._Schema<T> {
   return parseObject(schema);
 }
 
@@ -99,7 +102,7 @@ export function zodSchemaRaw<T extends ZodRawShape>(schema: ZodObject<T>): zm._S
 function parseObject<T extends ZodRawShape>(obj: ZodObject<T>): zm._Schema<T> {
   const object: any = {};
   for (const [key, field] of Object.entries(obj.shape)) {
-    if (field instanceof ZodObject) {
+    if (looksLikeInstanceof(field, ZodObject)) {
       object[key] = parseObject(field);
     } else {
       const f = parseField(field);
@@ -116,7 +119,7 @@ function parseField<T>(
   field: ZodType<T>,
   required = true,
   def?: T,
-  refinement?: zm.EffectValidator<T>,
+  refinement?: zm.EffectValidator<T>
 ): zm.mField | null {
   const field_type = field.constructor.name;
 
@@ -131,33 +134,33 @@ function parseField<T>(
     return parseUUID(required, unique);
   }
 
-  if (field instanceof ZodObject) {
+  if (looksLikeInstanceof(field, ZodObject)) {
     return parseObject(field);
   }
 
-  if (field instanceof ZodNumber) {
+  if (looksLikeInstanceof(field, ZodNumber)) {
     const isUnique = field.__zm_unique ?? false;
     return parseNumber(
       field,
       required,
       def as number,
       isUnique,
-      refinement as zm.EffectValidator<number>,
+      refinement as zm.EffectValidator<number>
     );
   }
 
-  if (field instanceof ZodString) {
+  if (looksLikeInstanceof(field, ZodString)) {
     const isUnique = field.__zm_unique ?? false;
     return parseString(
       field,
       required,
       def as string,
       isUnique,
-      refinement as zm.EffectValidator<string>,
+      refinement as zm.EffectValidator<string>
     );
   }
 
-  if (field instanceof ZodEnum) {
+  if (looksLikeInstanceof(field, ZodEnum)) {
     return parseEnum(Object.keys(field.Values), required, def as string);
   }
 
@@ -165,37 +168,41 @@ function parseField<T>(
     return parseBoolean(required, def as boolean);
   }
 
-  if (field instanceof ZodDate) {
+  if (looksLikeInstanceof(field, ZodDate)) {
     const isUnique = field.__zm_unique ?? false;
     return parseDate(
       required,
       def as Date,
       refinement as zm.EffectValidator<Date>,
-      isUnique,
+      isUnique
     );
   }
 
-  if (field instanceof ZodArray) {
+  if (looksLikeInstanceof(field, ZodArray)) {
     return parseArray(
       required,
       field.element,
-      def as T extends Array<infer K> ? K[] : never,
+      def as T extends Array<infer K> ? K[] : never
     );
   }
 
-  if (field instanceof ZodDefault) {
-    return parseField(field._def.innerType, required, field._def.defaultValue());
+  if (looksLikeInstanceof(field, ZodDefault)) {
+    return parseField(
+      field._def.innerType,
+      required,
+      field._def.defaultValue()
+    );
   }
 
-  if (field instanceof ZodOptional) {
+  if (looksLikeInstanceof(field, ZodOptional)) {
     return parseField(field._def.innerType, false, undefined);
   }
 
-  if (field instanceof ZodNullable) {
+  if (looksLikeInstanceof(field, ZodNullable)) {
     return parseField(field._def.innerType, false, def || null);
   }
 
-  if (field instanceof ZodUnion) {
+  if (looksLikeInstanceof(field, ZodUnion)) {
     return parseField(field._def.options[0]);
   }
 
@@ -203,18 +210,21 @@ function parseField<T>(
     return parseMixed(required, def);
   }
 
-  if (field instanceof ZodMap || field instanceof ZodRecord) {
+  if (
+    looksLikeInstanceof(field, ZodMap) ||
+    looksLikeInstanceof(field, ZodRecord)
+  ) {
     return parseMap(
       required,
       field.keySchema,
       def as Map<
         zm.UnwrapZodType<typeof field.keySchema>,
         zm.UnwrapZodType<typeof field.valueSchema>
-      >,
+      >
     );
   }
 
-  if (field instanceof ZodEffects) {
+  if (looksLikeInstanceof(field, ZodEffects)) {
     const effect = field._def.effect;
 
     if (effect.type === "refinement") {
@@ -231,7 +241,7 @@ function parseNumber(
   required = true,
   def?: number,
   unique = false,
-  validate?: zm.EffectValidator<number>,
+  validate?: zm.EffectValidator<number>
 ): zm.mNumber {
   const output: zm.mNumber = {
     type: Number,
@@ -251,7 +261,7 @@ function parseString(
   required = true,
   def?: string,
   unique = false,
-  validate?: zm.EffectValidator<string>,
+  validate?: zm.EffectValidator<string>
 ): zm.mString {
   const output: zm.mString = {
     type: String,
@@ -266,7 +276,11 @@ function parseString(
   return output;
 }
 
-function parseEnum(values: string[], required = true, def?: string): zm.mString {
+function parseEnum(
+  values: string[],
+  required = true,
+  def?: string
+): zm.mString {
   return {
     type: String,
     unique: false,
@@ -288,7 +302,7 @@ function parseDate(
   required = true,
   def?: Date,
   validate?: zm.EffectValidator<Date>,
-  unique = false,
+  unique = false
 ): zm.mDate {
   const output: zm.mDate = {
     type: Date,
@@ -301,7 +315,11 @@ function parseDate(
   return output;
 }
 
-function parseObjectId(required = true, ref?: string, unique = false): zm.mObjectId {
+function parseObjectId(
+  required = true,
+  ref?: string,
+  unique = false
+): zm.mObjectId {
   const output: zm.mObjectId = {
     type: SchemaTypes.ObjectId,
     required,
@@ -313,7 +331,11 @@ function parseObjectId(required = true, ref?: string, unique = false): zm.mObjec
 }
 
 // biome-ignore lint/style/useDefaultParameterLast: Should be consistent with other functions
-function parseArray<T>(required = true, element: ZodType<T>, def?: T[]): zm.mArray<T> {
+function parseArray<T>(
+  required = true,
+  element: ZodType<T>,
+  def?: T[]
+): zm.mArray<T> {
   const innerType = parseField(element);
   if (!innerType) throw new Error("Unsupported array type");
   return {
@@ -327,7 +349,7 @@ function parseMap<T, K>(
   // biome-ignore lint/style/useDefaultParameterLast: Consistency
   required = true,
   key: ZodType<T>,
-  def?: Map<NoInfer<T>, K>,
+  def?: Map<NoInfer<T>, K>
 ): zm.mMap<T, K> {
   const pointer = typeConstructor(key);
   return {
@@ -340,13 +362,13 @@ function parseMap<T, K>(
 
 function typeConstructor<T>(t: ZodType<T>) {
   switch (true) {
-    case t instanceof ZodString:
+    case looksLikeInstanceof(t, ZodString):
       return String;
-    case t instanceof ZodEnum:
+    case looksLikeInstanceof(t, ZodEnum):
       return String;
-    case t instanceof ZodNumber:
+    case looksLikeInstanceof(t, ZodNumber):
       return Number;
-    case t instanceof ZodDate:
+    case looksLikeInstanceof(t, ZodDate):
       return Date;
     default:
       return undefined;
